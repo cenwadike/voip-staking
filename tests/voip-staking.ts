@@ -2,8 +2,8 @@ import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { VoipStaking } from "../target/types/voip_staking";
 import { BN } from "bn.js";
-import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Signer, SystemProgram, SYSVAR_RENT_PUBKEY } from "@solana/web3.js";
-import { createMint, getAccount, getOrCreateAssociatedTokenAccount, mintTo, transfer, TOKEN_PROGRAM_ID, Account, } from '@solana/spl-token';
+import { Connection, Keypair, LAMPORTS_PER_SOL, PublicKey, Signer, SystemProgram } from "@solana/web3.js";
+import { createMint, getOrCreateAssociatedTokenAccount, mintTo, transfer, TOKEN_PROGRAM_ID } from '@solana/spl-token';
 
 
 const TestProgram = async() => {
@@ -174,7 +174,7 @@ const TestProgram = async() => {
     );
     await program.provider.connection.confirmTransaction(fundUserTxHash, "finalized");
   } catch (error) {
-    console.error(`Failed to fun user with ${error}`)
+    console.error(`Failed to fund user with ${error}`)
   }
 
   const stakeContext = {
@@ -194,7 +194,6 @@ const TestProgram = async() => {
   await program.provider.connection.confirmTransaction(stakeTxHash, "finalized");
   console.log("Stake transaction signature", stakeTxHash);
   console.log("-------------------------------STAKE COMPLETE-----------------------------------");
-
 
   console.log("-------------------------------CLAIM BEGIN-----------------------------------");
   console.log("------------------------------STATE ATA: ", contractAta.address.toBase58());

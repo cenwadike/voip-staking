@@ -83,14 +83,19 @@ pub mod voip_staking {
         if matches!(ctx.accounts.stake_info.has_claimed_all, true) {
             return  err!(VIOPStakingError::HasClaimedAllReward);
         }
-
-        // calculate reward
+        
         let stake_balance_as_ui_int = ctx.accounts.stake_info.stake_balance;
         let _staked_at = ctx.accounts.stake_info.staked_at;
         let stake_time = ctx.accounts.stake_info.stake_time as i64;
         let last_claim = ctx.accounts.stake_info.last_claim_at;
 
-        let stake_period = current_timestamp - last_claim;
+        // calculate stake period 
+        let mut stake_period = current_timestamp - last_claim;
+        if current_timestamp > stake_time {
+            stake_period = stake_time - last_claim;
+        }
+
+        // calculate reward
         let stake_unix_slots = stake_period / ONE_DAY_IN_UNIX;
         let mut stake_reward = stake_unix_slots as f64 * REWARD_PER_DAY * stake_balance_as_ui_int as f64;
 
@@ -120,7 +125,8 @@ pub mod voip_staking {
 
         // update state
         ctx.accounts.stake_info.last_claim_at = current_timestamp;
-        if ctx.accounts.stake_info.last_claim_at > stake_time {
+        ctx.accounts.stake_info.claim_balance -= stake_reward as u64;
+        if ctx.accounts.stake_info.last_claim_at >= stake_time {
             ctx.accounts.stake_info.has_claimed_all = true;
         }
 
@@ -135,7 +141,6 @@ pub mod voip_staking {
         let state = &mut ctx.accounts.state;
         let token_program = &ctx.accounts.token_program;
 
-        // call transfer on token account
         let cpi_accounts = Transfer {
             from: contract_ata.to_account_info(),
             to: user_ata.to_account_info(),
