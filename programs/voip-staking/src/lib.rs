@@ -29,6 +29,12 @@ pub mod voip_staking {
         let _is_paused = ctx.accounts.state.paused;
         require!(!_is_paused, VIOPStakingError::ContractPaused);
 
+        // should have no active stake
+        require!(
+            ctx.accounts.stake_info.is_staking == false,
+            VIOPStakingError::HasActiveStake
+        );
+
         // update stake info
         let clock = Clock::get()?;
         let current_timestamp = clock.unix_timestamp;
@@ -39,6 +45,7 @@ pub mod voip_staking {
         ctx.accounts.stake_info.last_claim_at = current_timestamp;
         ctx.accounts.stake_info.claim_balance = 0;
         ctx.accounts.stake_info.has_claimed_all = false;
+        ctx.accounts.stake_info.is_staking = true;
 
         match stake_time {
             StakeTime::OneHundredDays => {
@@ -81,43 +88,44 @@ pub mod voip_staking {
 
         // check if user has claimed all
         if matches!(ctx.accounts.stake_info.has_claimed_all, true) {
-            return  err!(VIOPStakingError::HasClaimedAllReward);
+            return err!(VIOPStakingError::HasClaimedAllReward);
         }
-        
-        let stake_balance_as_ui_int = ctx.accounts.stake_info.stake_balance;
+
+        let stake_balance = ctx.accounts.stake_info.stake_balance;
         let _staked_at = ctx.accounts.stake_info.staked_at;
         let stake_time = ctx.accounts.stake_info.stake_time as i64;
         let last_claim = ctx.accounts.stake_info.last_claim_at;
 
-        // calculate stake period 
+        // calculate stake period
         let mut stake_period = current_timestamp - last_claim;
-        if current_timestamp > stake_time {
+        if current_timestamp >= stake_time {
             stake_period = stake_time - last_claim;
         }
 
         // calculate reward
         let stake_unix_slots = stake_period / ONE_DAY_IN_UNIX;
-        let mut stake_reward = stake_unix_slots as f64 * REWARD_PER_DAY * stake_balance_as_ui_int as f64;
+        let mut stake_reward =
+            stake_unix_slots as f64 * REWARD_PER_DAY * stake_balance as f64;
 
         let _one_hundred_days = ONE_HUNDRED_DAYS_IN_UNIX + _staked_at;
         let _one_hundred_and_eighty_days = ONE_HUNDRED_AND_EIGHTY_DAYS_IN_UNIX + _staked_at;
         let _three_hundred_and_sixty_days = THREE_HUNDRED_AND_SIXTY_DAYS_IN_UNIX + _staked_at;
 
-        // check staking period is over        
+        // check staking period is over
         if current_timestamp >= stake_time {
             // check if user never claimed
             // give full reward if user never claimed until stake time is over
             if matches!(last_claim, _staked_at) {
                 if matches!(stake_time, _one_hundred_days) {
-                    stake_reward = stake_balance_as_ui_int as f64 * 0.56;   // 56%
+                    stake_reward = stake_balance as f64 * 0.56; // 56%
                     ctx.accounts.stake_info.claim_balance = stake_reward as u64;
                 }
                 if matches!(stake_time, _one_hundred_and_eighty_days) {
-                    stake_reward = stake_balance_as_ui_int as f64 * 1.08;   // 108%
+                    stake_reward = stake_balance as f64 * 1.08; // 108%
                     ctx.accounts.stake_info.claim_balance = stake_reward as u64;
                 }
                 if matches!(stake_time, _three_hundred_and_sixty_days) {
-                    stake_reward = stake_balance_as_ui_int as f64 * 1.8;    // 180%
+                    stake_reward = stake_balance as f64 * 1.8; // 180%
                     ctx.accounts.stake_info.claim_balance = stake_reward as u64;
                 }
             }
@@ -162,25 +170,31 @@ pub mod voip_staking {
 
         // check user has claimed all rewards
         if matches!(ctx.accounts.stake_info.has_claimed_all, false) {
-            return  err!(VIOPStakingError::HasNotClaimedAllReward);
+            return err!(VIOPStakingError::HasNotClaimedAllReward);
         }
 
         let clock = Clock::get()?;
         let current_timestamp = clock.unix_timestamp;
 
         let stake_time = ctx.accounts.stake_info.stake_time as i64;
+        let amount = ctx.accounts.stake_info.stake_balance;
 
         // check staking period is over
         require_gte!(
-            current_timestamp, stake_time, VIOPStakingError::StakePeriodNotOver
+            current_timestamp,
+            stake_time,
+            VIOPStakingError::StakePeriodNotOver
         );
+
+        // update state
+        ctx.accounts.stake_info.stake_balance = 0;
+        ctx.accounts.stake_info.is_staking = false;
 
         // signer seed
         let seeds = &["state".as_bytes(), &[ctx.bumps.state]];
         let signer = [&seeds[..]];
 
         // transfer token
-        let amount = ctx.accounts.stake_info.stake_balance;
         let contract_ata = &mut ctx.accounts.contract_ata;
         let user_ata = &mut ctx.accounts.user_ata;
         let state = &mut ctx.accounts.state;
@@ -366,10 +380,11 @@ pub struct StakeInfo {
     stake_time: i64,
     claim_balance: u64,
     has_claimed_all: bool,
+    is_staking: bool,
 }
 
 impl StakeInfo {
-    const LEN: usize = 16 + 16 + 16;
+    const LEN: usize = 16 + 16 + 16 + 16 + 16 + 4 + 4;
 }
 
 #[derive(Debug, Clone, Copy, AnchorDeserialize, AnchorSerialize)]
@@ -392,5 +407,7 @@ pub enum VIOPStakingError {
     #[msg("Has claimed all reward")]
     HasNotClaimedAllReward,
     #[msg("Staking period not over")]
-    StakePeriodNotOver
+    StakePeriodNotOver,
+    #[msg("Has an active stake")]
+    HasActiveStake,
 }
