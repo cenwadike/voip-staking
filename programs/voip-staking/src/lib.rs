@@ -21,6 +21,12 @@ pub mod voip_staking {
         ctx.accounts.state.admin = ctx.accounts.admin.key.clone();
         ctx.accounts.state.paused = false;
 
+        msg!(&format!(
+            "VoIP::Staking::Initialized
+             Admin:   {}",
+            ctx.accounts.admin.key
+        ));
+
         Ok(())
     }
 
@@ -30,12 +36,11 @@ pub mod voip_staking {
         require!(!_is_paused, VIOPStakingError::ContractPaused);
 
         // should have no active stake
-        require!(
-            ctx.accounts.stake_info.is_staking == false,
+        require_eq!(
+            ctx.accounts.stake_info.is_staking, false,
             VIOPStakingError::HasActiveStake
         );
 
-        // update stake info
         let clock = Clock::get()?;
         let current_timestamp = clock.unix_timestamp;
 
@@ -75,6 +80,14 @@ pub mod voip_staking {
         let cpi_program = token_program.to_account_info();
         transfer(CpiContext::new(cpi_program, cpi_accounts), amount)?;
 
+        msg!(&format!(
+            "VoIP::Staking::Staked
+             User:   {}
+             Amount: {}",
+            user.key,
+            amount / 10u64.pow(9)
+        ));
+
         Ok(())
     }
 
@@ -104,8 +117,7 @@ pub mod voip_staking {
 
         // calculate reward
         let stake_unix_slots = stake_period / ONE_DAY_IN_UNIX;
-        let mut stake_reward =
-            stake_unix_slots as f64 * REWARD_PER_DAY * stake_balance as f64;
+        let mut stake_reward = stake_unix_slots as f64 * REWARD_PER_DAY * stake_balance as f64;
 
         let _one_hundred_days = ONE_HUNDRED_DAYS_IN_UNIX + _staked_at;
         let _one_hundred_and_eighty_days = ONE_HUNDRED_AND_EIGHTY_DAYS_IN_UNIX + _staked_at;
@@ -160,6 +172,14 @@ pub mod voip_staking {
             amount,
         )?;
 
+        msg!(&format!(
+            "VoIP::Staking::Claim
+             User:   {}
+             Amount: {}",
+            ctx.accounts.user.key,
+            amount / 10u64.pow(9)
+        ));
+
         Ok(())
     }
 
@@ -212,35 +232,51 @@ pub mod voip_staking {
             amount,
         )?;
 
+        msg!(&format!(
+            "VoIP::Staking::Withdraw
+             User:   {}
+             Amount: {}",
+            ctx.accounts.user.key,
+            amount / 10u64.pow(9)
+        ));
+
         Ok(())
     }
 
     pub fn pause(ctx: Context<Pause>) -> Result<()> {
-        let _is_paused = ctx.accounts.state.paused;
+        let is_paused = ctx.accounts.state.paused;
         let _signer = ctx.accounts.admin.key.clone();
         let admin = ctx.accounts.state.admin;
 
-        require!(!_is_paused, VIOPStakingError::ContractPaused);
+        require!(!is_paused, VIOPStakingError::ContractPaused);
         require!(matches!(admin, _signer), VIOPStakingError::Unauthorized);
 
         ctx.accounts.state.paused = true;
 
-        msg!("VOIP Staking Contract Paused");
+        msg!(&format!(
+            "VOIP::Staking::Pause
+             IsPaused:   {}",
+            ctx.accounts.state.paused
+        ));
 
         Ok(())
     }
 
     pub fn un_pause(ctx: Context<UnPause>) -> Result<()> {
-        let _is_paused = ctx.accounts.state.paused;
+        let is_paused = ctx.accounts.state.paused;
         let _signer = ctx.accounts.admin.key.clone();
         let admin = ctx.accounts.state.admin;
 
-        require!(_is_paused, VIOPStakingError::ContractNotPaused);
+        require!(is_paused, VIOPStakingError::ContractNotPaused);
         require!(matches!(admin, _signer), VIOPStakingError::Unauthorized);
 
         ctx.accounts.state.paused = false;
 
-        msg!("VOIP Migration Contract Unpaused");
+        msg!(&format!(
+            "VOIP::Staking::UnPause
+             IsPaused:   {}",
+            ctx.accounts.state.paused
+        ));
 
         Ok(())
     }
